@@ -239,7 +239,7 @@ export const payAPI = async (req, res) => {
     });
 
     const response = axios.post(process.env.JAVA_SERVER_URL, payload, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `${token}` },
       httpsAgent: agent
     });
 

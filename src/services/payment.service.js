@@ -1,11 +1,20 @@
 // services/paymentService.js
 import axios from "axios";
+import https from "https";
 import logger from "../logger/winston.logger.js";
-
+import fs from "fs";
 
 export const makePayment = async (authToken, payload) => {
+  
   const paymentType = payload.amount < 200000 ? "rtgs" : "neft";
   const url = `${process.env.INSTA_PAYMENT_API}/${paymentType}`;
+
+  const httpsAgent = new https.Agent({
+    cert: fs.readFileSync(process.env.CLIENT_CERT),  // Your client certificate
+    key: fs.readFileSync(process.env.CLIENT_KEY),   // Your private key
+    ca: fs.readFileSync(process.env.CA_CERT),        // CA cert (used by Java server to verify client cert)
+    rejectUnauthorized: true, // Enforce server cert validation
+  });
 
   try {
     logger.info(`Making payment request to: ${url}`);
@@ -14,6 +23,7 @@ export const makePayment = async (authToken, payload) => {
         Authorization: authToken,
         "Content-Type": "application/json",
       },
+      httpsAgent,
     });
   } catch (error) {
     logger.error(`Payment request failed: ${error.message}`);
