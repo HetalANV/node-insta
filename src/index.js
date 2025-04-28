@@ -1,25 +1,13 @@
 import dotenv from "dotenv";
 import startApp from "./loader/index.loader.js";
-// import cron from "node-cron";
-// import { checkPendingTransactions } from "./services/cronJob.service.js";
-// import TransactionHistoryModel from "./models/TransactionHistoryModel.js";
+import cron from "node-cron";
+import updatePendingTransactions from "./jobs/transactionStatusUpdater.js";
 
 // Set up cron job to run every 5 minutes
-// cron.schedule('*/1 * * * *', () => {
-//   console.log('Running transaction status check...');
-//   checkPendingTransactions();
-// });
-
-// Database sync function
-// async function syncDatabase() {
-//   try {
-//     // Sync the models to create tables if they don't exist
-//     await TransactionHistoryModel.sync();
-//     console.log('Transaction History table synchronized');
-//   } catch (error) {
-//     console.error('Error syncing database:', error);
-//   }
-// }
+cron.schedule('*/1 * * * *', () => {
+  console.log('Running transaction status check...');
+  updatePendingTransactions();
+});
 
 dotenv.config({
   path: "./.env",

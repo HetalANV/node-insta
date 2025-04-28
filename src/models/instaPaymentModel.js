@@ -41,8 +41,8 @@ const InstaPaymentModel = instaPaymentSequelize.define('InstaPaymentModel', {
   },
   created_at: {
     type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: instaPaymentSequelize.literal('CURRENT_TIMESTAMP'), // Default to current timestamp
+    defaultValue: instaPaymentSequelize.literal('CURRENT_TIMESTAMP'),
+    allowNull: true,
   },
   created_by: {
     type: DataTypes.STRING,

@@ -7,7 +7,7 @@ import { mtsUserfyUser } from "../middlewares/mtls-client.middleware.js";
 const router = express.Router();
 // ✅ Define POST Route
 
-router.route("/instanet").post(verifyUser, mtsUserfyUser, processInstaPayment);
+router.route("/instanet").post(verifyUser, processInstaPayment);
 router.route("/").get(verifyUser, getInstaPayment);
 
 export default router;

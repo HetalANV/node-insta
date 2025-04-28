@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import crypto from 'crypto';
 
 const algorithm = 'aes-128-cbc'; // 16-byte key for AES-128
@@ -17,7 +18,16 @@ export const decryptAES = (encrypted, key) => {
   return decrypted;
 };
 
-export const generateNonce = (client_code) => {
-  // You could use timestamp + client_code hash or random UUID
-  return `${client_code}-${Date.now()}`;
-}
+
+export const generateNonce = () => {
+  const timestamp = Date.now().toString();
+  const randomBytes = crypto.randomBytes(8).toString('hex'); // 16 characters
+  return `${timestamp}-${randomBytes}`;
+};
+
+export const generateJWT = (payload) => {
+  const secret = process.env.JWT_SECRET;
+  const expiresIn = process.env.JWT_EXPIRES_IN || "20h";
+
+  return jwt.sign(payload, secret, { expiresIn });
+};

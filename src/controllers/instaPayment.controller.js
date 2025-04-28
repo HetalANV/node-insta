@@ -3,7 +3,7 @@ import InstaPayementModel from "../models/instaPaymentModel.js";
 import FundPayOutMasterModel from "../models/FundPayOutMasterModel.js";
 import { getBankDetails } from "../services/bank.service.js";
 import { findOrCreateFundRecord } from "../services/fund.service.js";
-import { makePayment } from "../services/payment.service.js";
+import { initiatePaymentWithJWT } from "../services/payment.service.js";
 import logger from "../logger/winston.logger.js";
 import { paginate } from "../utils/pagination.js";
 
@@ -74,27 +74,20 @@ export const processInstaPayment = async (req, res) => {
   let paymentStatus = '';
 
   try {
-
-    paymentResponse = await makePayment(req.headers.authtoken, paymentPayload);
+    paymentResponse = await initiatePaymentWithJWT(paymentPayload, client_code, req.user);
     const parsedData = JSON.parse(paymentResponse.data?.data || '{}');
     uniqueId = parsedData.UNIQUEID;
     paymentStatus = parsedData.STATUS;
 
 
   } catch (error) {
-    console.error("Payment API error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      headers: error.response?.headers,
-    });
-
+    logger.error("Error while verifying micro service:", error.message);
     await fundRecord.update({ paymentStatus: "failed" });
 
     return res.status(500).json({
       success: false,
       message: "Payment API failed",
-      error: error.response?.data || error.message,
+      error: error.response?.data || "Unable to process your request at the moment. Please try again later.",
     });
   }
 
