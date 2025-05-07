@@ -1,12 +1,12 @@
-import { Op, Sequelize } from "sequelize";
+import { Op } from "sequelize";
 import InstaPayementModel from "../models/instaPaymentModel.js";
 import TransactionHistoryModel from "../models/TransactionHistoryModel.js";
-import { paginate } from "../utils/pagination.js";
 import logger from "../logger/winston.logger.js";
 import { fetchTransactionStatus, parseResponseData } from "../services/payment.service.js";
 
 import InstaPaymentModel from "../models/instaPaymentModel.js";
 import { entryPayementTechExcel } from "../services/techexcel.service.js";
+import { generateJWT, generateToken } from "../utils/mTLS.js";
 /**
  * API endpoint to fetch transaction history
  */
@@ -206,6 +206,92 @@ export const getTransactionHistory = async (req, res) => {
     });
   }
 };
+
+export const processPendingTransactionsCron = async () => {
+  try {
+    const start = new Date();
+    const end = new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const whereClause = {
+      paymentStatus: "PENDING FOR APPROVAL",
+    };
+
+    const pendingTransactions = await InstaPaymentModel.findAll({
+      where: whereClause,
+      order: [["created_at", "DESC"]],
+    });
+
+    if (!pendingTransactions.length) {
+      console.log("No pending transactions found.");
+      return;
+    }
+
+    await Promise.all(
+      pendingTransactions.map(async (transaction) => {
+        try {
+          logger.info(`Processing transaction with uniqueId: ${transaction.client_code}`);
+          // Generate token here (if Java API still needs it temporarily)
+          const token = await generateToken(transaction.client_code); // implement as needed
+          console.log('\x1b[36mtoken ==========>>>\x1b[0m', token);
+
+          const result = await fetchTransactionStatus(
+            { authtoken: token },
+            transaction.unique_id,
+            transaction.source
+          );
+
+          // Update main table
+          transaction.paymentStatus = result.paymentStatus;
+          transaction.utrn = result.utrn;
+          transaction.updated_at = new Date();
+          await transaction.save();
+
+          // Log to history
+          await TransactionHistoryModel.create({
+            payment_id: transaction.id,
+            unique_id: transaction.unique_id,
+            client_code: transaction.client_code,
+            bank_acc_no: transaction.BankAccNo,
+            bank_ifsc: transaction.BankIFSC,
+            bene_name: transaction.beneName,
+            amount: transaction.amount,
+            status: transaction.status,
+            payment_status: result.paymentStatus,
+            raw_response: JSON.stringify(result),
+            urn: result.urn || null,
+            utr_number: result.utrn || null,
+            created_by: "system-cronjob",
+          });
+
+          if (result.paymentStatus === "COMPLETED") {
+            const techexcelResponse = await entryPayementTechExcel(
+              transaction.client_code,
+              transaction.amount,
+              result.utrn
+            );
+            const voucherNo = extractVoucherNo(techexcelResponse?.[0]?.returnvalue);
+            console.log('\x1b[36mVoucher No:\x1b[0m', voucherNo);
+
+            await InstaPaymentModel.update(
+              { voucher_no: voucherNo },
+              { where: { unique_id: transaction.unique_id } }
+            );
+          }
+        } catch (error) {
+          logger.error(`Error processing transaction ${transaction.unique_id}: ${error.message}`);
+        }
+      })
+    );
+
+    console.log("Cron job completed: All pending transactions processed.");
+  } catch (error) {
+    logger.error("Cron job error in processPendingTransactionsCron:", error.message);
+  }
+};
+
+
 
 // export const getTransactionHistory = async (req, res) => {
 //   try {

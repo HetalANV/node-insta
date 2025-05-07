@@ -7,7 +7,7 @@ import { instaPaymentSequelize } from "../config/dbConnection.js";
 import { entryPayementTechExcel } from "../services/techexcel.service.js";
 import logger from "../logger/winston.logger.js";
 import TransactionHistoryModel from "../models/TransactionHistoryModel.js";
-import { getTransactionHistory } from "../controllers/transaction.controller.js";
+import { getTransactionHistory, processPendingTransactionsCron } from "../controllers/transaction.controller.js";
 
 
 const updatePendingTransactions = async () => {
@@ -41,7 +41,7 @@ const updatePendingTransactions = async () => {
     };
 
     // Call your getTransactionHistory function
-    await getTransactionHistory(req, res);
+    await processPendingTransactionsCron(req, res);
   } catch (error) {
     console.error('Error in cron job execution:', error.message);
   }

@@ -27,7 +27,21 @@ export const generateNonce = () => {
 
 export const generateJWT = (payload) => {
   const secret = process.env.JWT_SECRET;
-  const expiresIn = process.env.JWT_EXPIRES_IN || "20h";
+  const expiresIn = process.env.JWT_EXPIRES_IN || "1h";
+
+  return jwt.sign(payload, secret, { expiresIn });
+};
+
+export const generateToken = (client_code) => {
+  const secret = process.env.TOKEN_SECRET;
+  const expiresIn = process.env.TOKEN_EXPIRES_IN || "1h";
+
+  if (!secret) {
+    throw new Error("TOKEN_SECRET is not defined");
+  }
+
+  // Payload must be an object
+  const payload = { client_code };
 
   return jwt.sign(payload, secret, { expiresIn });
 };

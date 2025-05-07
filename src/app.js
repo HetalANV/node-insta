@@ -5,6 +5,7 @@ import { errorHandler } from "./middlewares/error.moddleware.js";
 import { APP } from "./constant.js";
 import instaPaymentRoutes from "./routes/instaPayment.route.js";
 import transactionRoutes from "./routes/transaction.route.js";
+import healthRoutes from "./routes/health.route.js";
 import { mtsUserfyUser } from "./middlewares/mtls-client.middleware.js";
 import dotenv from "dotenv";
 
@@ -33,6 +34,7 @@ app.get("/new", (req, res) => {
 
 app.use("/v1/payment", instaPaymentRoutes);
 app.use("/v1", transactionRoutes);
+app.use("/instapay", healthRoutes);
 
 app.get("/secure-api", mtsUserfyUser, (req, res) => {
   res.json({ message: `Hello ${req.user.username}, you're verified via mTLS.` });

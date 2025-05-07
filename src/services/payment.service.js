@@ -1,5 +1,3 @@
-// services/paymentService.js
-
 import fs from "fs";
 import https from "https";
 
@@ -68,7 +66,7 @@ export const fetchTransactionStatus = async (authToken, uniqueId, source) => {
     // Determine the API endpoint based on the source
     const endpoint = source === "rtgs" ? "rtgs" : "neft";
     const url = `${process.env.INSTA_PAYMENT_API}/${endpoint}/tx-status?transRefNo=${uniqueId}`;
-    
+
     logger.info(`Fetching transaction status for: ${uniqueId}`);
     const response = await axios.get(url, {
       headers: {
