@@ -5,7 +5,8 @@ import { getBankDetails } from "../services/bank.service.js";
 import { findOrCreateFundRecord } from "../services/fund.service.js";
 import { initiatePaymentWithJWT } from "../services/payment.service.js";
 import logger from "../logger/winston.logger.js";
-import { paginate } from "../utils/pagination.js";
+import moment from 'moment';
+
 
 export const processInstaPayment = async (req, res) => {
   const username = req.user?.username;
@@ -13,19 +14,25 @@ export const processInstaPayment = async (req, res) => {
 
   logger.info(`Processing InstaPayment for client: ${client_code}`);
 
-  // Check if a successful payment already exists for the client
+  // Check if a successful payment exists for the client today
+  const today = moment().startOf('day').format('YYYY-MM-DD');
+
+  // Using Sequelize literal for proper date handling
   const existingPayment = await InstaPayementModel.findOne({
     where: {
       client_code,
       BankAccNo: bank_acno,
       paymentStatus: 'success',
+      // created_at: {
+      //   [Op.gte]: Sequelize.literal(`CAST('${today}' AS DATE)`)
+      // }
     },
   });
 
   if (existingPayment) {
     return res.status(400).json({
       success: false,
-      message: "A successful payment already exists for this client and account.",
+      message: "A successful payment already exists for this client and account today. Please try again tomorrow.",
     });
   }
 
@@ -75,13 +82,16 @@ export const processInstaPayment = async (req, res) => {
 
   try {
     paymentResponse = await initiatePaymentWithJWT(paymentPayload, client_code, req.user);
-    const parsedData = JSON.parse(paymentResponse.data?.data || '{}');
-    uniqueId = parsedData.UNIQUEID;
-    paymentStatus = parsedData.STATUS;
+    console.log('\x1b[36mpaymentResponse ==========>>>\x1b[0m', paymentResponse);
 
+    // Parse the nested response string
+    const responseData = JSON.parse(paymentResponse?.data?.transactionDetails?.response || '{}');
+    uniqueId = responseData.UNIQUEID;
+    paymentStatus = responseData.STATUS || 'PENDING';
 
   } catch (error) {
-    logger.error("Error while verifying micro service:", error.message);
+    logger.error("Error while verifying micro service:");
+
     await fundRecord.update({ paymentStatus: "failed" });
 
     return res.status(500).json({
@@ -93,10 +103,11 @@ export const processInstaPayment = async (req, res) => {
 
   const updatedStatus = paymentResponse.data?.status ? "success" : "failed";
 
-  await fundRecord.update({ paymentStatus: updatedStatus });
+  await fundRecord.update({ status: updatedStatus });
 
   // // 4. TechExcel (only if success)
   let voucherNo = null;
+
 
   // 5. Log transaction
   try {
@@ -112,9 +123,10 @@ export const processInstaPayment = async (req, res) => {
       created_by: client_code,
       updated_by: username,
       message: paymentResponse.data?.message || "Processed",
-      status: updatedStatus,
-      paymentStatus: paymentStatus, // Correct field name
-      unique_id: uniqueId.slice(0, 100), // Truncate if necessary
+      status: paymentResponse.data?.status,
+      paymentStatus: paymentStatus,
+      uuid: paymentResponse.data?.transactionDetails?.uuid,
+      unique_id: uniqueId, // Truncate if necessary
       voucher_no: voucherNo ? voucherNo.slice(0, 50) : null, // Handle null
     });
 
@@ -122,6 +134,7 @@ export const processInstaPayment = async (req, res) => {
     await fundRecord.update({ instapayement_id: transaction.id });
 
     logger.info(`Payment successful for client: ${client_code}`);
+
 
     return res.status(201).json({
       success: true,
@@ -133,7 +146,9 @@ export const processInstaPayment = async (req, res) => {
         beneName: transaction.beneName,
         source: transaction.source,
         status: transaction.status,
+        unique_id: uniqueId,
         paymentStatus: transaction.paymentStatus, // Correct field name
+        uuid: paymentResponse.data?.transactionDetails?.uuid,
         client_code: transaction.client_code,
         created_by: transaction.created_by,
         updated_by: transaction.updated_by,
@@ -143,7 +158,7 @@ export const processInstaPayment = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error creating transaction: ${error.message}`);
-    console.error("Error creating transaction:", error.message, error.stack);
+
     return res.status(500).json({
       success: false,
       message: "Failed to log transaction",
@@ -155,7 +170,6 @@ export const processInstaPayment = async (req, res) => {
 export const processPennyDropPayment = async (req, res) => {
   try {
     const authorization = await verifyUser(req.headers.authorization);
-    console.log("Authorization:", authorization);
 
     const { beneAccNo, beneIFSC, amount } = req.body;
 
@@ -276,58 +290,4 @@ export const processPennyDropPayment = async (req, res) => {
   }
 };
 
-export const getInstaPayment = async (req, res) => {
-  logger.info("Fetching InstaPayments...");
-
-  try {
-    const { page = 1, limit = 10 } = req.query; // Default to 1 and 10 if not provided
-    const parsedPage = parseInt(page, 10); // Ensure page is an integer
-    const parsedLimit = parseInt(limit, 10); // Ensure limit is an integer
-
-    if (isNaN(parsedPage) || isNaN(parsedLimit)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid pagination parameters. 'page' and 'limit' must be numbers.",
-      });
-    }
-
-    const query = paginate(
-      {
-        order: [["created_at", "DESC"]], // Sort by created_at in descending order
-      },
-      parsedPage,
-      parsedLimit
-    );
-
-    const payments = await InstaPayementModel.findAndCountAll(query);
-
-    // Pick only specific fields from each payment
-    const formattedPayments = payments.rows.map(payment => ({
-      amount: payment.amount,
-      BankAccNo: payment.BankAccNo,
-      BankIFSC: payment.BankIFSC,
-      beneName: payment.beneName,
-      source: payment.source,
-      paymentStatus: payment.paymentStatus,
-      created_by: payment.created_by,
-      updated_by: payment.updated_by,
-      created_at: payment.created_at,
-      updated_at: payment.updated_at,
-    }));
-
-    logger.info("Fetched InstaPayments successfully");
-
-    res.status(200).json({
-      success: true,
-      count: payments.count,
-      totalPages: Math.ceil(payments.count / parsedLimit),
-      currentPage: parsedPage,
-      data: formattedPayments,
-    });
-  } catch (error) {
-    logger.error(`Error fetching InstaPayments: ${error.message}`);
-
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-};
 

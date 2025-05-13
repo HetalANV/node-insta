@@ -61,6 +61,10 @@ const InstaPaymentModel = instaPaymentSequelize.define('InstaPaymentModel', {
     type: DataTypes.STRING,
     allowNull: false,
   },
+  uuid: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
   unique_id: {
     type: DataTypes.STRING(100),
     allowNull: true,
@@ -79,8 +83,19 @@ const InstaPaymentModel = instaPaymentSequelize.define('InstaPaymentModel', {
     allowNull: true,
   }
 }, {
-  tableName: 'tbl_insta_payment', // Set the table name
-  timestamps: false, // Enable Sequelize's automatic timestamps
+  tableName: 'tbl_insta_payment',
+  timestamps: false,
+  freezeTableName: true,
+  hooks: {
+    beforeFind(options) {
+      if (options.where && options.where.payment_status) {
+        options.where.paymentStatus = options.where.payment_status;
+        delete options.where.payment_status;
+      }
+    }
+  }
 });
+
+InstaPaymentModel.sync({ alter: false });
 
 export default InstaPaymentModel;

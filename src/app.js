@@ -32,7 +32,7 @@ app.get("/new", (req, res) => {
   res.send(`Welcome to App ${APP}`);
 });
 
-app.use("/v1/payment", instaPaymentRoutes);
+app.use("/v1", instaPaymentRoutes);
 app.use("/v1", transactionRoutes);
 app.use("/instapay", healthRoutes);
 
